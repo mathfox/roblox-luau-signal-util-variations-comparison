@@ -1,0 +1,6 @@
+[submodule "submodules/NevermoreEngine"]
+	path = submodules/NevermoreEngine
+	url = https://github.com/Quenty/NevermoreEngine
+[submodule "submodules/RbxUtil"]
+	path = submodules/RbxUtil
+	url = https://github.com/Sleitnick/RbxUtil
