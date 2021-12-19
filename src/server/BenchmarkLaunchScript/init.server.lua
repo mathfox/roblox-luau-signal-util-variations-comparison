@@ -4,7 +4,9 @@ local SignalBenchmarkModule = require(script.SignalBenchmarkModule)
 
 task.wait(5)
 
-for _, signalModuleScript in ipairs(ReplicatedStorage:GetChildren()) do
+local benchmarkModules = ReplicatedStorage:GetChildren()
+
+for _, signalModuleScript in ipairs(benchmarkModules) do
 	if not signalModuleScript:IsA("ModuleScript") then
 		continue
 	end
@@ -12,5 +14,5 @@ for _, signalModuleScript in ipairs(ReplicatedStorage:GetChildren()) do
 	SignalBenchmarkModule(signalModuleScript)
 
 	-- prevent exhausted allowed execution time
-	task.wait(1)
+	task.wait(5)
 end

@@ -1,91 +1,125 @@
-local HttpService = game:GetService("HttpService")
+local freeRunnerThread = nil
 
-local Prototype = {}
-
-function Prototype:Fire(...: any)
-	if not self._bindableEvent then
-		error("signal was destroyed", 2)
-	end
-
-	local args = table.pack(...)
-
-	local key = HttpService:GenerateGUID(false)
-	self._argMap[key] = args
-
-	self._bindableEvent:Fire(key)
+-- creates a new thread if existing one is busy or not exist
+local function acquireRunnerThreadAndCallEventHandler(fn: (...any) -> ...any, ...: any)
+	local acquiredRunnerThread = freeRunnerThread
+	freeRunnerThread = nil
+	fn(...)
+	freeRunnerThread = acquiredRunnerThread
 end
 
-function Prototype:Connect(callback: (...any) -> ...any): RBXScriptConnection
-	if not self._bindableEvent then
-		error("signal was destroyed", 2)
-	elseif type(callback) ~= "function" then
-		error("#1 argument must be a function!", 2)
+local function runEventHandlerInFreeThread(...)
+	acquireRunnerThreadAndCallEventHandler(...)
+
+	while true do
+		acquireRunnerThreadAndCallEventHandler(coroutine.yield())
 	end
+end
 
-	return self._bindableEvent.Event:Connect(function(key: string)
-		if not self._bindableEvent then
-			error("signal was destroyed", 2)
-		end
+local ConnectionPrototype = {}
+ConnectionPrototype.__index = ConnectionPrototype
 
-		local args = self._argMap[key]
-		if args then
-			callback(table.unpack(args, 1, args.n))
+function ConnectionPrototype:Disconnect()
+	if not self._connected then
+		return
+	else
+		self._connected = false
+
+		if self._signal._previous == self then
+			self._signal._previous = self._previous
 		else
-			error("missing arg data, probably due to reentrance")
+			local current = self._signal._previous
+
+			while current and current._previous ~= self do
+				current = current._previous
+			end
+
+			if current then
+				current._previous = self._previous
+			end
 		end
-	end)
-end
-
-function Prototype:Wait(): ...any
-	local key = self._bindableEvent.Event:Wait()
-	local args = self._argMap[key]
-	if not args then
-		error("missing arg data, probably due to reentrance")
-	end
-
-	return table.unpack(args, 1, args.n)
-end
-
-function Prototype:Destroy()
-	if self._bindableEvent then
-		self._bindableEvent:Destroy()
-		self._bindableEvent = nil
 	end
 end
 
-local Signal = {}
-Signal.__index = Prototype
+ConnectionPrototype.disconnect = ConnectionPrototype.Disconnect
 
-function Signal.is(object: any): boolean
-	return type(object) == "table" and getmetatable(object) == Signal
-end
+local Connection = {}
 
-local function new()
-	local self = setmetatable({}, Signal)
-
-	self._bindableEvent = Instance.new("BindableEvent")
-	self._argMap = {}
-
-	self._bindableEvent.Event:Connect(function(key: string)
-		self._argMap[key] = nil
-
-		if not self._bindableEvent and (not next(self._argMap)) then
-			self._argMap = nil
-		end
-	end)
+function Connection.new(signal, fn: (...any) -> ...any)
+	local self = setmetatable({
+		_connected = true,
+		_signal = signal,
+		_fn = fn,
+	}, ConnectionPrototype)
 
 	return self
 end
 
-export type Signal = typeof(new())
+local SignalPrototype = {}
+SignalPrototype.__index = SignalPrototype
 
-function Signal.new(): Signal
-	return new()
+function SignalPrototype:Connect(fn: (...any) -> ...any)
+	local connection = Connection.new(self, fn)
+
+	if self._previous then
+		connection._previous = self._previous
+
+		self._previous = connection
+	else
+		self._previous = connection
+	end
+
+	return connection
 end
 
-Prototype.fire = Prototype.Fire
-Prototype.connect = Prototype.Connect
-Prototype.wait = Prototype.Wait
-Prototype.destroy = Prototype.Destroy
+function SignalPrototype:Fire(...: any)
+	local connection = self._previous
+
+	while connection do
+		if connection._connected then
+			if not freeRunnerThread then
+				freeRunnerThread = coroutine.create(runEventHandlerInFreeThread)
+			end
+
+			task.spawn(freeRunnerThread, connection._fn, ...)
+		end
+
+		connection = connection._previous
+	end
+end
+
+function SignalPrototype:Wait(): ...any
+	local waitingCoroutine = coroutine.running()
+
+	local connection
+	connection = self:Connect(function(...: any)
+		connection:Disconnect()
+
+		task.spawn(waitingCoroutine, ...)
+	end)
+
+	return coroutine.yield()
+end
+
+function SignalPrototype:Destroy()
+	self._previous = nil
+end
+
+SignalPrototype.fire = SignalPrototype.Fire
+SignalPrototype.connect = SignalPrototype.Connect
+SignalPrototype.wait = SignalPrototype.Wait
+SignalPrototype.destroy = SignalPrototype.Destroy
+
+local Signal = {}
+
+function Signal.new()
+	local self = setmetatable({}, SignalPrototype)
+
+	return self
+end
+
+function Signal.is(object: any): boolean
+	return type(object) == "table" and getmetatable(object) == SignalPrototype
+end
 
 return Signal
