@@ -1,7 +1,8 @@
-local freeRunnerThread = nil
+type Function = (...any) -> ...any
 
--- creates a new thread if existing one is busy or not exist
-local function acquireRunnerThreadAndCallEventHandler(fn: (...any) -> ...any, ...: any)
+local freeRunnerThread: thread? = nil
+
+local function acquireRunnerThreadAndCallEventHandler(fn: Function, ...: any)
 	local acquiredRunnerThread = freeRunnerThread
 	freeRunnerThread = nil
 	fn(...)
@@ -17,13 +18,14 @@ local function runEventHandlerInFreeThread(...)
 end
 
 local ConnectionPrototype = {}
+ConnectionPrototype.Connected = true
 ConnectionPrototype.__index = ConnectionPrototype
 
 function ConnectionPrototype:Disconnect()
-	if not self._connected then
+	if not self.Connected then
 		return
 	else
-		self._connected = false
+		self.Connected = false
 
 		if self._signal._previous == self then
 			self._signal._previous = self._previous
@@ -45,12 +47,18 @@ ConnectionPrototype.disconnect = ConnectionPrototype.Disconnect
 
 local Connection = {}
 
-function Connection.new(signal, fn: (...any) -> ...any)
-	local self = setmetatable({
-		_connected = true,
+function Connection.new(signal: Signal, fn: Function): Connection
+	local constructor: {
+		Connected: boolean,
+		_signal: Signal,
+		_fn: Function,
+		_previous: Connection?,
+	} = {
 		_signal = signal,
 		_fn = fn,
-	}, ConnectionPrototype)
+	}
+
+	local self = setmetatable(constructor, ConnectionPrototype)
 
 	return self
 end
@@ -58,7 +66,7 @@ end
 local SignalPrototype = {}
 SignalPrototype.__index = SignalPrototype
 
-function SignalPrototype:Connect(fn: (...any) -> ...any)
+function SignalPrototype:Connect(fn: Function): Connection
 	local connection = Connection.new(self, fn)
 
 	if self._previous then
@@ -76,12 +84,12 @@ function SignalPrototype:Fire(...: any)
 	local connection = self._previous
 
 	while connection do
-		if connection._connected then
+		if connection.Connected then
 			if not freeRunnerThread then
 				freeRunnerThread = coroutine.create(runEventHandlerInFreeThread)
 			end
 
-			task.spawn(freeRunnerThread, connection._fn, ...)
+			task.spawn(freeRunnerThread :: thread, connection._fn, ...)
 		end
 
 		connection = connection._previous
@@ -105,18 +113,25 @@ function SignalPrototype:Destroy()
 	self._previous = nil
 end
 
-SignalPrototype.fire = SignalPrototype.Fire
 SignalPrototype.connect = SignalPrototype.Connect
+SignalPrototype.fire = SignalPrototype.Fire
 SignalPrototype.wait = SignalPrototype.Wait
 SignalPrototype.destroy = SignalPrototype.Destroy
 
 local Signal = {}
 
-function Signal.new()
-	local self = setmetatable({}, SignalPrototype)
+function Signal.new(): Signal
+	local constructor: {
+		_previous: Connection?,
+	} = {}
+
+	local self = setmetatable(constructor, SignalPrototype)
 
 	return self
 end
+
+export type Signal = typeof(Signal.new())
+export type Connection = typeof(Connection.new(Signal.new(), function() end))
 
 function Signal.is(object: any): boolean
 	return type(object) == "table" and getmetatable(object) == SignalPrototype
