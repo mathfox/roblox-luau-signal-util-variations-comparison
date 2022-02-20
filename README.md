@@ -1,2 +1,2 @@
 # roblox-luau-signal-util-variations-comparison
-Comparison of different variations of Signal util
+Comparison of different variations of Signal util.

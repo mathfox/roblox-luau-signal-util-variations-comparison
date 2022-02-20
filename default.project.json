@@ -1,25 +1,25 @@
 {
-    "name": "signals-comparison",
-    "globIgnorePaths": [
-        "**/*.spec**"
-    ],
-    "tree": {
-        "$className": "DataModel",
-        "ReplicatedStorage": {
-            "$className": "ReplicatedStorage",
-            "NevermoreSignal": {
-                "$path": "submodules/NevermoreEngine/src/signal/src/Shared/Signal.lua"
-            },
-            "SleitnickSignal": {
-                "$path": "submodules/RbxUtil/modules/signal"
-            },
-            "CustomSignal": {
-                "$path": "src/CustomSignal.lua"
-            }
-        },
-        "ServerScriptService": {
-            "$className": "ServerScriptService",
-            "$path": "src/server"
-        }
-    }
+   "name": "signals-comparison",
+   "globIgnorePaths": [
+      "**/*.spec**"
+   ],
+   "tree": {
+      "$className": "DataModel",
+      "ReplicatedStorage": {
+         "$className": "ReplicatedStorage",
+         "NevermoreSignal": {
+            "$path": "submodules/NevermoreEngine/src/signal/src/Shared/Signal.lua"
+         },
+         "SleitnickSignal": {
+            "$path": "submodules/RbxUtil/modules/signal"
+         },
+         "CustomSignal": {
+            "$path": "submodules/roblox-luau-utils/src/shared/Signal"
+         }
+      },
+      "ServerScriptService": {
+         "$className": "ServerScriptService",
+         "$path": "src"
+      }
+   }
 }
